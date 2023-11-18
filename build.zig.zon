@@ -1,5 +1,9 @@
 .{
     .name = "Zig-S-Records",
-    .version = "1.0.0",
+    .version = "1.1.0",
     .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "srec.zig",
+    },
 }

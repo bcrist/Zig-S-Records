@@ -1,40 +1,44 @@
-const std = @import("std");
-const builtin = @import("builtin");
-const native_os = builtin.target.os.tag;
-
-pub fn writer(comptime Address: type, inner_writer: anytype, header_data: []const u8, pretty: bool) !Writer(Address, @TypeOf(inner_writer)) {
-    return Writer(Address, @TypeOf(inner_writer)).init(inner_writer, header_data, pretty);
+pub fn writer(comptime Address: type, inner_writer: anytype, options: Writer_Options) !Writer(Address, @TypeOf(inner_writer)) {
+    return Writer(Address, @TypeOf(inner_writer)).init(inner_writer, options);
 }
 
-pub fn Writer(comptime Address: type, comptime InnerWriter: type) type {
+pub const Writer_Options = struct {
+    line_ending: ?[]const u8 = null,
+    header_data: []const u8 = "",
+    pretty: bool = false,
+};
+
+pub fn Writer(comptime Address: type, comptime Inner_Writer: type) type {
     switch (@typeInfo(Address).Int.bits) {
         16, 24, 32 => {},
         else => @compileError("Invalid address type; must be u32, u24, or u16"),
     }
 
     return struct {
-        inner: InnerWriter,
+        inner: Inner_Writer,
         data_rec_count: usize,
+        line_ending: []const u8,
         pretty: bool,
 
         const Self = @This();
 
-        pub fn init(inner_writer: InnerWriter, header_data: []const u8, pretty: bool) !Self {
+        pub fn init(inner_writer: Inner_Writer, options: Writer_Options) !Self {
             var self = Self{
                 .inner = inner_writer,
                 .data_rec_count = 0,
-                .pretty = pretty,
+                .line_ending = options.line_ending orelse default_line_ending(),
+                .pretty = options.pretty,
             };
-            try self.writeRecord('0', 0, header_data);
+            try self.write_record('0', 0, options.header_data);
             return self;
         }
 
-        fn writeByte(self: *Self, d: u8) !void {
+        fn write_byte(self: *Self, d: u8) !void {
             try self.inner.writeByte("0123456789ABCDEF"[d >> 4]);
             try self.inner.writeByte("0123456789ABCDEF"[@as(u4, @truncate(d))]);
         }
 
-        fn writeRecord(self: *Self, record_type: u8, address: anytype, data: []const u8) !void {
+        fn write_record(self: *Self, record_type: u8, address: anytype, data: []const u8) !void {
             const A = @TypeOf(address);
             std.debug.assert(@bitSizeOf(A) <= 32);
 
@@ -46,7 +50,7 @@ pub fn Writer(comptime Address: type, comptime InnerWriter: type) type {
             }
 
             var checksum: u8 = @intCast(data.len + 3);
-            try self.writeByte(checksum);
+            try self.write_byte(checksum);
 
             if (self.pretty) {
                 try self.inner.writeByte(' ');
@@ -54,21 +58,21 @@ pub fn Writer(comptime Address: type, comptime InnerWriter: type) type {
 
             if (comptime @bitSizeOf(A) > 24) {
                 const address_part: u8 = @truncate(address >> 24);
-                try self.writeByte(address_part);
+                try self.write_byte(address_part);
                 checksum +%= address_part;
             }
             if (comptime @bitSizeOf(A) > 16) {
                 const address_part: u8 = @truncate(address >> 16);
-                try self.writeByte(address_part);
+                try self.write_byte(address_part);
                 checksum +%= address_part;
             }
 
             const address_high: u8 = @truncate(address >> 8);
-            try self.writeByte(address_high);
+            try self.write_byte(address_high);
             checksum +%= address_high;
 
             const address_low: u8 = @truncate(address);
-            try self.writeByte(address_low);
+            try self.write_byte(address_low);
             checksum +%= address_low;
 
             if (self.pretty) {
@@ -76,7 +80,7 @@ pub fn Writer(comptime Address: type, comptime InnerWriter: type) type {
             }
 
             for (data) |d| {
-                try self.writeByte(d);
+                try self.write_byte(d);
                 checksum +%= d;
             }
 
@@ -84,12 +88,9 @@ pub fn Writer(comptime Address: type, comptime InnerWriter: type) type {
                 try self.inner.writeByte(' ');
             }
 
-            try self.writeByte(checksum ^ 0xFF);
+            try self.write_byte(checksum ^ 0xFF);
 
-            if (native_os == .windows) {
-                try self.inner.writeByte('\r');
-            }
-            try self.inner.writeByte('\n');
+            try self.inner.writeAll(self.line_ending);
 
             self.data_rec_count += 1;
         }
@@ -106,21 +107,21 @@ pub fn Writer(comptime Address: type, comptime InnerWriter: type) type {
             };
 
             while (remaining.len > 32) {
-                try self.writeRecord(data_record_type, start, remaining[0..32]);
+                try self.write_record(data_record_type, start, remaining[0..32]);
                 start += 32;
                 remaining = remaining[32..];
             }
 
-            try self.writeRecord(data_record_type, start, remaining);
+            try self.write_record(data_record_type, start, remaining);
         }
 
         pub fn finish(self: *Self, termination_address: Address) !void {
             if (self.data_rec_count <= 0xFFFF) {
                 const count: u16 = @intCast(self.data_rec_count);
-                try self.writeRecord('5', count, "");
+                try self.write_record('5', count, "");
             } else if (self.data_rec_count <= 0xFFFFFF) {
                 const count: u24 = @intCast(self.data_rec_count);
-                try self.writeRecord('6', count, "");
+                try self.write_record('6', count, "");
             }
 
             const termination_record_type = switch (@bitSizeOf(Address)) {
@@ -129,7 +130,13 @@ pub fn Writer(comptime Address: type, comptime InnerWriter: type) type {
                 32 => '7',
                 else => unreachable,
             };
-            try self.writeRecord(termination_record_type, termination_address, "");
+            try self.write_record(termination_record_type, termination_address, "");
         }
     };
 }
+
+fn default_line_ending() []const u8 {
+    return if (@import("builtin").target.os.tag == .windows) "\r\n" else "\n";
+}
+
+const std = @import("std");
