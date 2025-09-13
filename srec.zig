@@ -9,7 +9,7 @@ pub const Writer_Options = struct {
 };
 
 pub fn Writer(comptime Address: type, comptime Inner_Writer: type) type {
-    switch (@typeInfo(Address).Int.bits) {
+    switch (@typeInfo(Address).int.bits) {
         16, 24, 32 => {},
         else => @compileError("Invalid address type; must be u32, u24, or u16"),
     }
