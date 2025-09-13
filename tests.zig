@@ -2,9 +2,9 @@ test "pretty=false" {
     const binary = "abcdef123\x00\x10\x01asdf\r\n0\x00";
 
     var buf: [1024]u8 = undefined;
-    var stream = std.io.fixedBufferStream(&buf);
+    var w = std.io.Writer.fixed(&buf);
 
-    var writer = try srec.writer(u32, stream.writer(), .{
+    var writer = try srec.writer(u32, &w, .{
         .header_data = "srec test",
         .line_ending = "\n"
     });
@@ -18,16 +18,16 @@ test "pretty=false" {
         \\S5030002FA
         \\S7030000ABCD84
         \\
-        , stream.getWritten());
+        , w.buffered());
 }
 
 test "pretty=true" {
     const binary = "abcdef123\x00\x10\x01asdf\r\n0\x00";
 
     var buf: [1024]u8 = undefined;
-    var stream = std.io.fixedBufferStream(&buf);
+    var w = std.io.Writer.fixed(&buf);
 
-    var writer = try srec.writer(u32, stream.writer(), .{
+    var writer = try srec.writer(u32, &w, .{
         .header_data = "srec test",
         .line_ending = "\n",
         .pretty = true,
@@ -42,7 +42,7 @@ test "pretty=true" {
         \\S5 03 0002  FA
         \\S7 03 0000ABCD  84
         \\
-        , stream.getWritten());
+        , w.buffered());
 }
 
 const srec = @import("srec");
