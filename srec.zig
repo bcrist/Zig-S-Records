@@ -29,7 +29,7 @@ pub fn Writer(comptime Address: type) type {
                 .line_ending = options.line_ending orelse default_line_ending(),
                 .pretty = options.pretty,
             };
-            try self.write_record('0', 0, options.header_data);
+            try self.write_record('0', @as(u16, 0), options.header_data);
             return self;
         }
 
