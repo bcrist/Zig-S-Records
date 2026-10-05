@@ -99,7 +99,7 @@ pub fn Writer(comptime Address: type) type {
             var start = address;
             var remaining = data;
 
-            const data_record_type = switch(@bitSizeOf(Address)) {
+            const data_record_type = switch (@bitSizeOf(Address)) {
                 16 => '1',
                 24 => '2',
                 32 => '3',

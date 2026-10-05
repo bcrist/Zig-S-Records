@@ -6,7 +6,7 @@ test "pretty=false" {
 
     var writer = try srec.writer(u32, &w, .{
         .header_data = "srec test",
-        .line_ending = "\n"
+        .line_ending = "\n",
     });
 
     try writer.write(0x1234567, binary);
@@ -18,7 +18,7 @@ test "pretty=false" {
         \\S5030002FA
         \\S7030000ABCD84
         \\
-        , w.buffered());
+    , w.buffered());
 }
 
 test "pretty=true" {
@@ -42,7 +42,7 @@ test "pretty=true" {
         \\S5 03 0002  FA
         \\S7 03 0000ABCD  84
         \\
-        , w.buffered());
+    , w.buffered());
 }
 
 const srec = @import("srec");
